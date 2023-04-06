@@ -220,7 +220,7 @@ data.draw<-data.frame(data[,1],mean,se)
 
 library(bfast)
 timeseries<-ts(mean,start = 1949)
-#Because social-ecological systems tend to maintain the same structure and state over a long period of time, we try to delineate the period as large as possible and at the same time they are robust to the set h parameter in the bfast function.
+#Because social-ecological systems tend to maintain the same structure and state over a long period of time, we try to delineate the period as large as possible and at the same time they have different change features.
 breakpoints1<-bfast(timeseries, h=0.2,season="none",max.iter=1)
 breakpoints2<-bfast(timeseries, h=0.3,season="none",max.iter=1)
 breakpoints3<-bfast(timeseries, h=0.4,season="none",max.iter=1)
@@ -234,8 +234,8 @@ plot(breakpoints2)
 plot(breakpoints3)
 
 #when h>=0.3 the The results of the breakpoint calculation start to converge
-#We identified the final one breakpoint 1981 and divided two periods: 1949-1981 (32 years) and 1981-2020 (38 years)
-#The difference in the length of two time periods is very small.
+#We identified the final two breakpoint 1981 and 2003 and divided three periods: 1949-1981, 1981-2003, and 2003-2020
+#The three periods have different changes features
 
 #combine data
 #data.draw<-data.frame(data.draw,breakpoints1$output[[1]]$Tt)
@@ -464,10 +464,7 @@ weight_cut.1<-cut(E(net.1)$weight, breaks = weight_breaks, include.lowest = TRUE
 weight_cut.2<-cut(E(net.2)$weight, breaks = weight_breaks, include.lowest = TRUE)
 weight_cut.3<-cut(E(net.3)$weight, breaks = weight_breaks, include.lowest = TRUE)
 
-#现在不是分类的，而是开始的是将一些的边的重新分类，还有就是如何将这邪边的进行重新地方二类的
-#还有就是还不是时候的的的的的的对的
-#还有就是现在的是的，现在数的的的
-#现在需要将数据的分为1，3，5，7，9
+
 width.1<-as.numeric(weight_cut.1)
 width.2<-as.numeric(weight_cut.2)
 width.3<-as.numeric(weight_cut.3)
