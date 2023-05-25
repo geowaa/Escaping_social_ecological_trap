@@ -1,0 +1,9 @@
+cff-version: 1.1.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Wang
+    given-names: Zhuangzhuang
+    orcid: https://orcid.org/0000-0002-3520-0825
+title: Quantitative diagnostic methods for socio-ecological traps through composite system state index and socio-ecological networks
+version: v1.0.0
+date-released: 2023-05-25
