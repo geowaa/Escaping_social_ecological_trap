@@ -1,0 +1,903 @@
+---
+title: "Escaping social-ecological trap"
+author: "Wang Zhuangzhuang"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Composite system state index
+
+#### Observing six system state variables
+
+```{r}
+library(ggplot2)
+library(cowplot)
+library(readxl)
+
+data = read_xlsx("Data for composite index.xlsx")
+head(data)
+
+#Observe change patterns of raw data
+p1<-ggplot(data=data,aes(x=Year,y=Net_income))+
+  geom_line()+geom_point()
+p2<-ggplot(data=data,aes(x=Year,y=PerCAGrain))+
+  geom_line()+geom_point()
+p3<-ggplot(data=data,aes(x=Year,y=PerCAFruits))+
+  geom_line()+geom_point()
+p4<-ggplot(data=data,aes(x=Year,y=PerCAOil_crops))+
+  geom_line()+geom_point()
+p5<-ggplot(data=data,aes(x=Year,y=PerCACotton))+
+  geom_line()+geom_point()
+p6<-ggplot(data=data,aes(x=Year,y=Sediment_load))+
+  geom_line()+geom_point()
+
+plot_grid(p1,p2,p3,p4,p5,p6,nrow = 3,labels="AUTO",
+          label_size = 9,align = "v")
+```
+
+
+#### Calculating composite state index using different methods
+
+```{r}
+library(Compind)
+library(kableExtra)
+library(readxl)
+
+data = read_xlsx("Data for composite index.xlsx")
+
+#Here we define the sediment load (represents soil erosion) as the negative variable to  social-ecological state, i.e., the higher the value, the more undesirable the system state. Per capita net income of rural household and per capita/area ecosystem goods (grain, fruits, oil-bearing crops, and cotton) are positive variables, i.e., the higher the value, the more desirable the system state.
+
+#Normalize data using max-min method
+#to avoid 0 and 1, we set the max normalized value as 0.996 and the min normalized value as 0.002
+normalize_POS <- function(x) {
+  return ((0.996 - 0.002)*(x - min(x))/(max(x)-min(x))+0.002)
+}
+normalize_NEG <- function(x) {
+  return ((0.996-0.002)*(max(x)-x)/(max(x)-min(x))+0.002)
+}
+
+data_norm<-data.frame(normalize_POS(data[,2]),
+                      normalize_POS(data[,3]),
+                      normalize_POS(data[,4]),
+                      normalize_POS(data[,5]),
+                      normalize_POS(data[,6]),
+                      normalize_NEG(data[,7]))
+                      
+
+#Calculating composite index (scores) using different methods
+#details for different methods provided by compind package can be found in the following link: https://cran.r-project.org/web/packages/Compind/Compind.pdf
+
+#Benefit of the Doubt approach (BoD): 'ci_bod' function
+CI_BoD_estimated<-ci_bod(data_norm,indic_col = c(1:6))
+ci_bod_est<-as.data.frame(CI_BoD_estimated$ci_bod_est)
+names(ci_bod_est) <- "Benef_Doubt"
+plot(ci_bod_est$Benef_Doubt,type="l")
+
+#Constrained Benefit of the Doubt approach (BoD): 'ci_bod_constr' function
+CI_BoD_constr_estimated<-ci_bod_constr(data_norm,indic_col = c(1:6),up_w=1,low_w=0)
+ci_bod_constr_est<-as.data.frame(CI_BoD_constr_estimated$ci_bod_constr_est)
+names(ci_bod_constr_est) <- "Cons_Benef_Doubt"
+plot(ci_bod_constr_est$Cons_Benef_Doubt,type="l")
+
+#Weighting method based on Factor AnalysisL: 'ci_factor' function
+CI_Factor_estimated<-ci_factor(data_norm,indic_col = c(1:6),method="ALL")
+ci_factor_est <- data.frame( CI_Factor_estimated$ci_factor_est)
+names(ci_factor_est) <- "ci_factor"
+plot(ci_factor_est$ci_factor,type="l")
+
+#Generalized geometric mean quantity index numbers: 'ci_geom_gen' function
+CI_Geom_gen_estimated<-ci_geom_gen(data_norm,indic_col = c(1:6),meth = "EQUAL")
+ci_mean_geom_est<-data.frame(CI_Geom_gen_estimated$ci_mean_geom_est)
+names(ci_mean_geom_est) <- "ci_mean_geom_est"
+plot(ci_mean_geom_est$ci_mean_geom_est,type="l")
+
+#MAZZIOTTA-PARETO INDEX (MPI): 'ci_mpi' function
+CI_MPI_estimated <- ci_mpi(data_norm,indic_col = c(1:6))  
+ci_mpi_est <- data.frame(CI_MPI_estimated$ci_mpi_est)
+names(ci_mpi_est) <- "Mazziotta_Pareto"
+plot(ci_mpi_est$Mazziotta_Pareto,type="l")
+
+#Robust Benefit of the Doubt approach (RBOD): 'ci_rbod' function
+CI_RBoD_estimated <-  ci_rbod(data_norm,indic_col = c(1:6),
+                              M = 5,  #The number of elements in each sample.
+                              B = 200) #The number of bootstap replicates.
+ci_rbod_est <- data.frame(CI_RBoD_estimated$ci_rbod_est)
+names(ci_rbod_est) <- "Benef_Doubt_Rob"
+plot(ci_rbod_est$Benef_Doubt_Rob,type="l")
+
+#WROCLAW TAXONOMY METHOD
+#Note: units with higher values for the simple indicators get lower values of composite indicator
+CI_wroclaw_estimated <-  ci_wroclaw(data_norm,indic_col = c(1:6))
+ci_wroclaw_est <- data.frame( CI_wroclaw_estimated$ci_wroclaw_est)
+names(ci_wroclaw_est) <- "Wroclaw"
+plot(ci_mpi_est$Mazziotta_Pareto,type="l")
+
+
+#column bind all the composite index 
+all_com_ind <- cbind( #row.names(scores.this),
+  ci_bod_est, # Benefit of the Doubt approach
+  ci_bod_constr_est, # Constrained Benefit of the Doubt approach
+  ci_factor_est, #Factor analysis componnents
+  ci_mean_geom_est, # Generalized geometric mean quantity index numbers
+  ci_mpi_est, # MAZZIOTTA-PARETO INDEX
+  ci_rbod_est, # Robust Benefit of the Doubt approach
+  ci_wroclaw_est) # WROCLAW TAXONOMY METHOD
+
+kable(all_com_ind, caption = "Composite with different algorithm") %>%
+           kable_styling(bootstrap_options = c("striped", "bordered", "condensed", "responsive"), font_size = 9)
+
+#Observe change patterns of composite index
+all_com_ind<-data.frame(data[,1],all_com_ind)
+p1<-ggplot(data=all_com_ind,aes(x=Year,y=Benef_Doubt))+geom_line()+geom_point()
+p2<-ggplot(data=all_com_ind,aes(x=Year,y=Cons_Benef_Doubt))+geom_line()+geom_point()
+p3<-ggplot(data=all_com_ind,aes(x=Year,y=ci_factor))+geom_line()+geom_point()
+p4<-ggplot(data=all_com_ind,aes(x=Year,y=ci_mean_geom_est))+geom_line()+geom_point()
+p5<-ggplot(data=all_com_ind,aes(x=Year,y=Mazziotta_Pareto))+geom_line()+geom_point()
+p6<-ggplot(data=all_com_ind,aes(x=Year,y=Benef_Doubt_Rob))+geom_line()+geom_point()
+p7<-ggplot(data=all_com_ind,aes(x=Year,y=Wroclaw))+geom_line()+geom_point()
+plot_grid(p1,p2,p3,p4,p5,p6,p7,nrow = 4,labels="AUTO",label_size = 9,align = "v")
+
+#Normalize all the composite index again on a 0 to 1 scale in order to be compared.
+normalize_POS_1 <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+normalize_NEG_1 <- function(x) {
+  return ((max(x) - x) / (max(x) - min(x)))
+}
+
+com_index_norm<-data.frame(normalize_POS_1(all_com_ind[,2]),normalize_POS_1(all_com_ind[,3]),normalize_POS_1(all_com_ind[,4]),normalize_POS_1(all_com_ind[,5]),normalize_POS_1(all_com_ind[,6]),normalize_POS_1(all_com_ind[,7]),normalize_NEG_1(all_com_ind[,8]))
+names(com_index_norm)<-c("Benef_Doubt","Cons_Benef_Doubt","ci_factor","ci_mean_geom_est",
+                         "Mazziotta_Pareto","Benef_Doubt_Rob","Wroclaw")
+
+com_index_norm<-data.frame(data[,1],com_index_norm)
+```
+
+#### Drawing for seven calculated composite system state index 
+
+```{r}
+library(ggplot2)
+library(eoffice)
+library(reshape2)
+
+com_index_norm_draw<-com_index_norm
+
+com_index_norm_draw$Wroclaw<-com_index_norm_draw$Wroclaw + 6
+com_index_norm_draw$Benef_Doubt_Rob<-com_index_norm_draw$Benef_Doubt_Rob + 5
+com_index_norm_draw$Mazziotta_Pareto<-com_index_norm_draw$Mazziotta_Pareto + 4
+com_index_norm_draw$ci_mean_geom_est<-com_index_norm_draw$ci_mean_geom_est + 3
+com_index_norm_draw$ci_factor<-com_index_norm_draw$ci_factor + 2
+com_index_norm_draw$Cons_Benef_Doubt<-com_index_norm_draw$Cons_Benef_Doubt + 1
+com_index_norm_draw$Benef_Doubt<-com_index_norm_draw$Benef_Doubt
+                   
+# Draw
+Fig.S1 <- ggplot(data = com_index_norm_draw,mapping = aes(x = Year))+
+  scale_y_continuous(limits = c(0,7),
+                     breaks = c(0.5,1.5,2.5,3.5,4.5,5.5,6.5),expand = c(0,0),
+                     labels = c('Benef_Doubt','Cons_Benef_Doubt','ci_factor',
+                                'ci_mean_geom_est','Mazziotta_Pareto','Benef_Doubt_Rob',
+                                'Wroclaw'))+
+  geom_hline(yintercept = 0.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 1.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 2.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 3.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 4.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 5.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_hline(yintercept = 6.5,linetype = 'dashed',color = '#000000',size = 0.3)+
+  geom_line(mapping = aes(y = Wroclaw),color = '#028501',size = 0.8)+
+  geom_line(mapping = aes(y = Benef_Doubt_Rob),color = '#009985',size = 0.8)+
+  geom_line(mapping = aes(y = Mazziotta_Pareto),color = '#7ed4c9',size = 0.8)+
+  geom_line(mapping = aes(y = ci_mean_geom_est),color = '#ffc653',size = 0.8)+
+  geom_line(mapping = aes(y = ci_factor),color = '#f3f14e',size = 0.8)+
+  geom_line(mapping = aes(y = Cons_Benef_Doubt),color = '#97afeb',size = 0.8)+
+  geom_line(mapping = aes(y = Benef_Doubt),color = '#6584df',size = 0.8)+
+  xlab('Year')+
+  ylab('Methods')+
+  theme_custom()+
+  theme(aspect.ratio = 8/4)
+
+Fig.S1
+
+#topptx(Fig.S1,filename = "Composite system state index.pptx")
+```
+
+#### Breakpoints of composite system state index
+
+```{r}
+#define function for calculating standard error
+st.err <- function(x){
+  sd(x)/sqrt(length(x))
+}
+mean<-apply(com_index_norm[,c(2:8)],1,mean)
+se<-apply(com_index_norm[,c(2:8)],1,st.err)
+data.draw<-data.frame(data[,1],mean,se)
+
+library(bfast)
+timeseries<-ts(mean,start = 1949)
+#Because social-ecological systems tend to maintain the same structure and state over a long period of time, we try to delineate the period as large as possible and at the same time they are robust to the set h parameter in the bfast function.
+breakpoints1<-bfast(timeseries, h=0.2,season="none",max.iter=1)
+breakpoints2<-bfast(timeseries, h=0.3,season="none",max.iter=1)
+breakpoints3<-bfast(timeseries, h=0.4,season="none",max.iter=1)
+
+breakpoints1 #breakpoint 1981 2003
+breakpoints2 #breakpoint 1981
+breakpoints3 #breakpoint 1981
+
+plot(breakpoints1)
+plot(breakpoints2)
+plot(breakpoints3)
+
+#when h>=0.3 the The results of the breakpoint calculation start to converge
+#We identified the final two breakpoint 1981 and 2003 and divided three periods: 1949-1981, 1981-2003, and 2003-2020
+#The three periods have different changes features
+
+#combine data
+#data.draw<-data.frame(data.draw,breakpoints1$output[[1]]$Tt)
+#calculating mean value according to breakpoints
+mean_p1<-mean(data.draw[c(1:33),2])
+mean_p2<-mean(data.draw[c(34:55),2])
+mean_p3<-mean(data.draw[c(56:72),2])
+mean_value<-c(rep(mean_p1,times=33),rep(mean_p2,times=22),rep(mean_p3,times=17))
+data.draw<-data.frame(data.draw[,1:3],mean_value)
+
+colnames(data.draw)<-c("Year","mean","se","mean_period")
+```
+
+#### Drawing for composite system state index
+
+composite system state mean value ± se and fitted trend by bfast package
+
+```{r}
+library(ggplot2)
+library(eoffice)
+library(RColorBrewer)
+
+##====theme function====##
+theme_custom <- function(){
+  myTheme <- theme(panel.background = element_rect(fill = 'white',color = 'black',size = 0.5),
+                   panel.grid = element_blank(),
+                   legend.position = 'none',
+                   plot.margin = margin(5,5,3,3),
+                   plot.background = element_blank(),
+                   axis.ticks = element_line(size = 0.2),
+                   axis.ticks.length = unit(0.15,'lines'),
+                   axis.title.y = element_text(size = 10.5,margin = margin(0,3,0,0),face = 'bold',family = 'Times'),
+                   axis.title.x = element_text(size = 10.5,margin = margin(4,0,0,0),face = 'bold',family = 'Times'),
+                   axis.text.y = element_text(size = 9,margin = margin(0,6,0,0),family = 'Times',color = '#000000'),
+                   axis.text.x = element_text(size = 9,margin = margin(8,0,0,0),family = 'Times',color = '#000000'))
+  return(myTheme)
+}
+##====theme function====##
+
+cssi_plot<-ggplot(data.draw,aes(x=Year, y=mean))+
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+ 
+  geom_line(aes(y=mean),size=0.75,color= rgb(157,158,162,max = 255)) +
+  geom_point(aes(y=mean),size=2,shape=21,color="black",fill="#1e56a0")+
+  geom_line(aes(y=mean_period),lty=5,colour="red")+
+  #geom_errorbar(aes(ymin=mean-se, ymax=mean+se),colour="black", width=.03,size=0.75)+
+  geom_ribbon(aes(ymin=mean-se,ymax=mean+se),alpha=0.2,fill="#1e56a0"
+              )+ #color="black",linetype="dotted"
+  labs(x="Year",y="Composite system state index")+
+  #theme_custom()+
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio =7.5/10)
+  #theme(aspect.ratio = 6.18/10)
+
+cssi_plot
+
+#topptx(cssi_plot,filename = "cssi_plot.pptx")
+```
+
+
+## Social-ecological network
+
+#### Calculating mutual information between system elements
+
+```{r}
+
+library(readxl)
+library(infotheo) #provide 'mutinformation' function
+library(minet)
+#library(arules) #provide discretize function
+
+data_ele = read_xlsx("Data for mutual information.xlsx")
+#read_excel("Data for mutual information.xlsx",sheet="table1")
+head(data_ele)
+
+data_p1<-data_ele[c(1:33),c(2:21)] #1949-1981
+data_p2<-data_ele[c(33:55),c(2:21)] #1981-2003
+data_p3<-data_ele[c(55:72),c(2:21)] #1982-2020
+
+#calculating mutual information
+#First, discretizes data using the equal frequencies or equal width binning algorithm.
+nbins_p1<- sqrt(NROW(data_p1))
+nbins_p2<- sqrt(NROW(data_p2))
+nbins_p3<- sqrt(NROW(data_p3))
+data_p1_dis<-infotheo::discretize(data_p1,"equalfreq", nbins_p1)
+data_p2_dis<-infotheo::discretize(data_p2,"equalfreq", nbins_p2)
+data_p3_dis<-infotheo::discretize(data_p3,"equalfreq", nbins_p3)
+
+MI_p1<-minet(data_p1_dis,method = "mrnet",estimator = "mi.shrink",disc = "none")
+MI_p2<-minet(data_p2_dis,method = "mrnet",estimator = "mi.shrink",disc = "none")
+MI_p3<-minet(data_p3_dis,method = "mrnet",estimator = "mi.shrink",disc = "none")
+
+#display matrix using heatmap
+palf <- colorRampPalette(c("gold", "dark orange"))
+heatmap(MI_p1[,1:20],Rowv = NA, Colv = NA, col = palf(100),
+scale="none", margins=c(10,10))
+heatmap(MI_p2[,1:20],Rowv = NA, Colv = NA, col = palf(100),
+scale="none", margins=c(10,10))
+heatmap(MI_p3[,1:20],Rowv = NA, Colv = NA, col = palf(100),
+scale="none", margins=c(10,10))
+```
+
+#### Constructing mutual information network using igraph package
+
+```{r}
+library(igraph)
+library(ggraph)
+library(RColorBrewer)
+
+net.1<-graph_from_adjacency_matrix(MI_p1,mode=c("undirected"),
+                                   diag = FALSE,
+                                   weighted =TRUE,
+                                   add.rownames="name")
+net.2<-graph_from_adjacency_matrix(MI_p2,mode=c("undirected"),
+                                   diag = FALSE,
+                                   weighted =TRUE,
+                                   add.rownames="name")
+net.3<-graph_from_adjacency_matrix(MI_p3,mode=c("undirected"),
+                                   diag = FALSE,
+                                   weighted =TRUE,
+                                   add.rownames="name")
+
+#We classified social-ecological elements into the following types:
+#1        Rural_pop       Socio-economic factor
+#2       Urban_rate       Socio-economic factor
+#3       Net_income       Socio-economic factor
+#4     Liveli_diver       Socio-economic factor
+#5   Sow_area_grain       Agricultural inputs
+#6    Area_orchards       Agricultural inputs
+#7     Sow_area_oil       Agricultural inputs
+#8  Sow_area_cotton       Agricultural inputs
+#9      Irriga_area       Agricultural inputs
+#10      Fertil_use       Agricultural inputs
+#11   Agri_mach_pow       Agricultural inputs
+#12    Output_grain       Agricultural outputs
+#13   Output_fruits       Agricultural outputs
+#14      Output_oil       Agricultural outputs
+#15   Output_cotton       Agricultural outputs
+#16      Affor_area       Ecological restoration
+#17  Planting_trees       Ecological restoration
+#18        Sed_load       Environment condition
+#19             Pre       Climate
+#20             Tem       Climate
+V(net.1)$type<-c(rep("Socio-economic factor",4),
+             rep("Agricultural inputs",7),
+             rep("Agricultural outputs",4),
+             rep("Ecological restoration",2),
+             rep("Environment condition",1),
+             rep("Climate",2))
+V(net.2)$type<-c(rep("Socio-economic factor",4),
+             rep("Agricultural inputs",7),
+             rep("Agricultural outputs",4),
+             rep("Ecological restoration",2),
+             rep("Environment condition",1),
+             rep("Climate",2))
+V(net.3)$type<-c(rep("Socio-economic factor",4),
+             rep("Agricultural inputs",7),
+             rep("Agricultural outputs",4),
+             rep("Ecological restoration",2),
+             rep("Environment condition",1),
+             rep("Climate",2))
+
+V(net.1)$type.num<-as.numeric(as.factor(V(net.1)$type))
+V(net.2)$type.num<-as.numeric(as.factor(V(net.2)$type))
+V(net.3)$type.num<-as.numeric(as.factor(V(net.3)$type))
+
+display.brewer.all()
+display.brewer.pal(6, "Set1")
+display.brewer.pal(6, "Set2")
+display.brewer.pal(6, "Set3")
+display.brewer.pal(6, "Pastel2")
+display.brewer.pal(6, "Pastel1")
+display.brewer.pal(6, "Paired")
+display.brewer.pal(6, "Dark2")
+display.brewer.pal(6, "Accent")
+
+
+colrs <- brewer.pal(6, "Accent") #Paired Dark2
+V(net.1)$color <- colrs[V(net.1)$type.num]
+V(net.2)$color <- colrs[V(net.2)$type.num]
+V(net.3)$color <- colrs[V(net.3)$type.num]
+
+plot(net.1)
+plot(net.2)
+plot(net.3)
+```
+
+#### Analyzing and drawing network structure
+
+```{r}
+library(igraph)
+library(netdiffuseR) #rescale_vertex_igraph
+
+# Community detection (by optimizing modularity over partitions):
+clp.1 <- cluster_optimal(net.1,weights = E(net.1)$weight)
+clp.2 <- cluster_optimal(net.2,weights = E(net.2)$weight)
+clp.3 <- cluster_optimal(net.3,weights = E(net.3)$weight)
+
+V(net.1)$community <- clp.1$membership
+V(net.2)$community <- clp.2$membership
+V(net.3)$community <- clp.3$membership
+
+
+#Find Eigenvector Centrality Scores of Network Positions
+evcent.1<-evcent(net.1,scale = T)
+evcent.2<-evcent(net.2,scale = T)
+evcent.3<-evcent(net.3,scale = T)
+
+V(net.1)$size3 <- evcent.1$vector
+V(net.2)$size3 <- evcent.2$vector
+V(net.3)$size3 <- evcent.3$vector
+
+# Based the weigh (Normalized mutual information), We classified the edge width into five classes:
+# 0-0.2 0.2-0.4 0.4-0.6 0.6-0.8 0.8-1 for visualization of network and making ledged
+
+# weight breaks
+weight_breaks <- c(0,0.2,0.4,0.6,0.8,1)
+weight_cut.1<-cut(E(net.1)$weight, breaks = weight_breaks, include.lowest = TRUE)
+weight_cut.2<-cut(E(net.2)$weight, breaks = weight_breaks, include.lowest = TRUE)
+weight_cut.3<-cut(E(net.3)$weight, breaks = weight_breaks, include.lowest = TRUE)
+
+width.1<-as.numeric(weight_cut.1)
+width.2<-as.numeric(weight_cut.2)
+width.3<-as.numeric(weight_cut.3)
+
+library(plyr)
+width.1<-mapvalues(width.1, c("1","2","3","4","5"),c("1","4","6","8","11"))
+width.2<-mapvalues(width.2, c("1","2","3","4","5"),c("1","4","6","8","11"))
+width.3<-mapvalues(width.3, c("1","2","3","4","5"),c("1","4","6","8","11"))
+
+E(net.1)$width<-width.1
+E(net.2)$width<-width.2
+E(net.3)$width<-width.3
+```
+
+```{r}
+library(eoffice)
+library(ggplotify)
+#topptx(filename = "test.pptx")
+
+#set colors
+node.col<-grDevices::adjustcolor(c("tomato","gold","#C5E5E7","#ECD89A","#557799"), alpha=1) #"#ECD89A"
+mark.col<-grDevices::adjustcolor(c("tomato","gold","#C5E5E7","#ECD89A","#557799"), alpha=0.4)
+mark.bor<-grDevices::adjustcolor(c("tomato","gold","#C5E5E7","#ECD89A","#557799"), alpha=0.8)
+
+par(bg="#f5f5f2")
+set.seed(2)
+plot(net.1, 
+     vertex.size=rescale_vertex_igraph(V(net.1)$size3,
+                                       par.usr = par("usr"),
+                                       minmax.relative.size = getOption("diffnet.minmax.relative.size", c(0.01, 0.04)),
+                                       adjust = 500),
+     vertex.color=node.col[V(net.1)$community],
+     vertex.label.color="black",
+     vertex.label.font = 2,
+     vertex.label.cex=1,
+     edge.width=E(net.1)$width,
+     label.font=2,label.cex=10,
+     layout=layout_with_fr, 
+     mark.groups=clp.1,
+     mark.shape = 1/2,
+     mark.col=mark.col,
+     mark.border = mark.bor,
+     mark.expand = 15)
+
+#topptx(filename = "network.p1.pptx")
+```
+
+```{r}
+par(bg="#f5f5f2")
+set.seed(6)
+plot(net.2, 
+     vertex.size=rescale_vertex_igraph(V(net.2)$size3,
+                                       par.usr = par("usr"),
+                                       minmax.relative.size = getOption("diffnet.minmax.relative.size", c(0.01, 0.04)),
+                                       adjust = 500),
+     vertex.color=node.col[V(net.2)$community],
+     vertex.label.color="black",
+     vertex.label.font = 2,
+     vertex.label.cex=1,
+     edge.width=E(net.2)$width,
+     label.font=2,label.cex=10,
+     layout=layout_with_fr, 
+     mark.groups=clp.2,
+     mark.shape = 1/2,
+     mark.col=mark.col,
+     mark.border = mark.bor,
+     mark.expand = 15)
+
+#topptx(filename = "network.p2.pptx")
+```
+
+```{r}
+par(bg="#f5f5f2")
+set.seed(5)
+plot(net.3, 
+     vertex.size=rescale_vertex_igraph(V(net.3)$size3,
+                                       par.usr = par("usr"),
+                                       minmax.relative.size = getOption("diffnet.minmax.relative.size", c(0.01, 0.04)),
+                                       adjust = 500),
+     vertex.color=node.col[V(net.3)$community],
+     vertex.label.color="black",
+     vertex.label.font = 2,
+     vertex.label.cex=1,
+     edge.width=E(net.3)$width,
+     label.font=2,label.cex=10,
+     layout=layout_with_fr, 
+     mark.groups=clp.3,
+     mark.shape = 1/2,
+     mark.col=mark.col,
+     mark.border = mark.bor,
+     mark.expand = 15)
+
+#topptx(filename = "network.p3.pptx")
+```
+
+
+```{r}
+library(reshape2)
+library(ggsci)
+##====theme function====##
+theme_custom <- function(){
+  myTheme <- theme(panel.background = element_rect(fill = 'white',color = 'black',size = 0.5),
+                   panel.grid = element_blank(),
+                   legend.position = 'right',
+                   plot.margin = margin(5,5,3,3),
+                   plot.background = element_blank(),
+                   axis.ticks = element_line(size = 0.2),
+                   axis.ticks.length = unit(0.15,'lines'),
+                   axis.title.y = element_text(size = 10.5,margin = margin(0,3,0,0),face = 'bold',family = 'Times'),
+                   axis.title.x = element_text(size = 10.5,margin = margin(4,0,0,0),face = 'bold',family = 'Times'),
+                   axis.text.y = element_text(size = 9,margin = margin(0,6,0,0),family = 'Times',color = '#000000'),
+                   axis.text.x = element_text(size = 9,margin = margin(8,0,0,0),family = 'Times',color = '#000000'))
+  return(myTheme)
+}
+##====theme function====##
+
+##====prepare data====##
+node.evcent<-data.frame(evcent.1$vector,evcent.2$vector,evcent.3$vector)
+colnames(node.evcent)<-c("evcent.p1","evcent.p2","evcent.p3")
+node.evcent$elements<-rownames(node.evcent)
+rownames(node.evcent)<-NULL
+node.evcent<-node.evcent[,c(4,1:3)]
+#prepare for drawing data
+node.evcent<-melt(node.evcent)
+##====prepare data====##
+
+##====draw====##
+plot.node.evcent<-ggplot(node.evcent, aes(x=elements, y=value, fill=variable)) +
+  geom_bar(stat="identity", position=position_dodge(),color="black", width=.6) +
+  #scale_fill_npg()+
+  #scale_fill_aaas()+
+  scale_fill_simpsons()+
+  coord_flip()+
+  xlab("Network nodes")+ylab("Normalized eigenvector centrality scores")+
+  theme_custom()+
+  theme(aspect.ratio = 9/4)
+
+plot.node.evcent
+#topptx(plot.node.evcent,filename = "plot.node.evcent.pptx")
+```
+
+#### Comprehensively drawing for social-ecological elements
+
+
+```{r}
+library(export)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(patchwork) # To display 2 charts together
+library(hrbrthemes)
+library(cowplot)
+library(eoffice)
+
+data_elements = read_xlsx("Drawing social-ecological elements.xlsx")
+head(data_elements)
+
+p1<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y = `Total population`), color='grey70',size=1)+
+  geom_line(aes(x=Year, y=Rural_pop),color="#3fbac2", size=1) +
+  geom_line(aes(x=Year, y=`Urban people`),color="#e95280", size=1) +
+  labs(x="Year",y="Population")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+
+p2<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Urban_rate),color="#e95280", size=1) +
+  labs(x="Year",y="Urbanization rate")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p3<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Net_income),color="#e95280", size=1) +
+  labs(x="Year",y="Net_income")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p4<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=`Engel's_coe_rural_res`),color="#e95280", size=1) +
+  labs(x="Year",y="Engel's_coe_rural_res")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+
+p5<-ggplot(data=data_elements) +
+  geom_area(aes(x=Year, y = Sow_area_grain), fill='#1e56a0',alpha = 0.3)+
+  geom_area(aes(x=Year, y = Area_orchards), fill='#1687a7',alpha = 0.5)+
+  geom_area(aes(x=Year, y = Sow_area_oil), fill='#ffb400',alpha = 0.5)+
+  geom_area(aes(x=Year, y = Sow_area_cotton), fill='#e95280',alpha = 0.5)+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        legend.position = 'left',
+        aspect.ratio = 5/5)
+
+p6<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=`Grain (10000t)`),color="#1e56a0", size=1) +
+  geom_line(aes(x=Year, y=`Fruits(10000t)`),color="#1687a7", size=1) +
+  geom_line(aes(x=Year, y=`Oil_crops(10000t)`),color="#ffb400", size=1) +
+  geom_line(aes(x=Year, y=`Cotton(10000t)`),color="#e95280", size=1) +
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+
+p7<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=PercGrain),color="#1e56a0", size=1) +
+  geom_line(aes(x=Year, y=PercFruits),color="#1687a7", size=1) +
+  geom_line(aes(x=Year, y=PercOil_crops),color="#ffb400", size=1) +
+  geom_line(aes(x=Year, y=PercCotton),color="#e95280", size=1) +
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+
+p8<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=PeraGrain),color="#1e56a0", size=1) +
+  geom_line(aes(x=Year, y=PeraOil_crops),color="#ffb400", size=1) +
+  geom_line(aes(x=Year, y=PeraCotton),color="#e95280", size=1) +
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p9<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Agri_mach_pow),color="#e95280", size=1) +
+  labs(x="Year",y="Agri_mach_pow")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p10<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Fertil_use),color="#e95280", size=1) +
+  labs(x="Year",y="Fertil_use")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p11<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Irriga_area),color="#e95280", size=1) +
+  labs(x="Year",y="Irriga_area")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p12<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Affor_area),color="#e95280", size=1) +
+  labs(x="Year",y="Affor_area")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p13<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Pre),color="#e95280", size=1) +
+  labs(x="Year",y="Pre")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p14<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Tem),color="#e95280", size=1) +
+  labs(x="Year",y="Tem")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+p15<-ggplot(data=data_elements) +
+  annotate("rect",xmin=-Inf, xmax=1981, ymin=-Inf, ymax=Inf,fill='#E7DAD2',alpha = 0.7)+
+  annotate("rect",xmin=2003, xmax=Inf, ymin=-Inf, ymax=Inf,fill='#8ECFC9',alpha = 0.7)+
+  geom_line(aes(x=Year, y=Sediment_load),color="#e95280", size=1) +
+  labs(x="Year",y="Sediment_load")+
+  #geom_vline(xintercept=c(1981,2003),lty=5)+
+  #ggtitle("Temperature: range 1-10") +
+  theme(panel.background = element_blank(),
+        panel.grid.major =element_blank(),
+        panel.grid.major.y=element_line(color = "grey30",size = 0.5,linetype = 2),
+        axis.line.x = element_line(colour = "black",size = 0.8),
+        axis.text = element_text(face="bold", color="black", 
+                           size=11),
+        panel.border = element_blank(),
+        aspect.ratio = 5/5)
+
+plot_grid(p1,p2,p3,p4,p5,p6,p7,p8,
+          p9,p10,p11,p12,p13,p14,p15,
+          nrow = 4,
+          labels="AUTO",
+          label_size = 8,
+          align = "v")
+
+#topptx(file="social_ecological elements.pptx",width = 13,height = 13)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
